@@ -4,6 +4,7 @@
   "package": "com.freecam.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "CameraMixin",
     "EntityMixin",
     "KeyboardInputMixin"
   ],
