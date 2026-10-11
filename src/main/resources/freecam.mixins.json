@@ -1,0 +1,11 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.freecam.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "EntityMixin",
+    "KeyboardInputMixin"
+  ],
+  "injectors": { "defaultRequire": 0 }
+}
