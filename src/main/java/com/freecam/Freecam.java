@@ -3,17 +3,20 @@ package com.freecam;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
-import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 
 public final class Freecam {
     public static boolean active = false;
-    private static RemotePlayer cam;
-    private static float yaw, pitch;
+    public static double x, y, z;
+    public static float yaw, pitch;
+    public static int cameraFrames = 0;
+
+    private static long last;
+    private static int activeTicks;
     private static Object greeted;
 
-    private static final double BASE_SPEED = 0.6; // blocks per tick
+    private static final double BASE_SPEED = 12.0; // blocks per second
     private static final double SPRINT_MULT = 3.0;
 
     public static void onTick(Minecraft mc) {
@@ -35,81 +38,67 @@ public final class Freecam {
             toggle(mc);
         }
 
-        tick(mc);
+        if (!active) return;
+
+        // Turn off on death / disconnect
+        if (mc.player == null || mc.level == null || !mc.player.isAlive()) {
+            active = false;
+            return;
+        }
+
+        // Diagnostic: warn if the camera hook never ran
+        activeTicks++;
+        if (activeTicks == 20 && cameraFrames == 0) {
+            mc.player.displayClientMessage(
+                Component.literal("[Freecam] Camera hook did not apply - check latest.log"), false);
+        }
+
+        // Don't let clicks act while in freecam
+        while (mc.options.keyAttack.consumeClick()) { }
+        while (mc.options.keyUse.consumeClick()) { }
     }
 
     private static void toggle(Minecraft mc) {
         if (active) {
-            off(mc, true);
+            active = false;
+            mc.player.displayClientMessage(Component.literal("Freecam OFF"), true);
             return;
         }
-        cam = new RemotePlayer(mc.level, mc.player.getGameProfile());
         Vec3 eye = mc.player.getEyePosition();
+        x = eye.x;
+        y = eye.y;
+        z = eye.z;
         yaw = mc.player.getYRot();
         pitch = mc.player.getXRot();
-
-        double feetY = eye.y - cam.getEyeHeight();
-        cam.setPos(eye.x, feetY, eye.z);
-        cam.xo = eye.x;
-        cam.yo = feetY;
-        cam.zo = eye.z;
-        applyRotation();
-
-        mc.setCameraEntity(cam);
+        last = System.nanoTime();
+        cameraFrames = 0;
+        activeTicks = 0;
         active = true;
         mc.player.displayClientMessage(Component.literal("Freecam ON"), true);
     }
 
-    private static void off(Minecraft mc, boolean message) {
-        active = false;
-        cam = null;
-        if (mc.player != null) {
-            mc.setCameraEntity(mc.player);
-            if (message) mc.player.displayClientMessage(Component.literal("Freecam OFF"), true);
-        }
-    }
-
     /** Mouse look: steers the camera instead of the player. */
     public static void look(double dYaw, double dPitch) {
-        if (cam == null) return;
         yaw += (float) dYaw * 0.15f;
         pitch += (float) dPitch * 0.15f;
         if (pitch > 90f) pitch = 90f;
         if (pitch < -90f) pitch = -90f;
-        applyRotation();
     }
 
-    private static void applyRotation() {
-        cam.setYRot(yaw);
-        cam.setXRot(pitch);
-        cam.yRotO = yaw;
-        cam.xRotO = pitch;
-    }
-
-    private static void tick(Minecraft mc) {
-        if (!active) return;
-
-        if (cam == null || mc.player == null || mc.level == null
-                || !mc.player.isAlive() || mc.getCameraEntity() != cam) {
-            off(mc, false);
-            return;
-        }
-
-        // Don't let clicks act on whatever the camera is pointing at
-        while (mc.options.keyAttack.consumeClick()) { }
-        while (mc.options.keyUse.consumeClick()) { }
-
-        cam.xo = cam.getX();
-        cam.yo = cam.getY();
-        cam.zo = cam.getZ();
-
+    /** Called once per rendered frame while active (from the camera mixin). */
+    public static void update() {
+        cameraFrames++;
+        Minecraft mc = Minecraft.getInstance();
+        long now = System.nanoTime();
+        double dt = Math.min((now - last) / 1.0e9, 0.1);
+        last = now;
         if (mc.screen != null) return;
 
         Options o = mc.options;
         double f = (o.keyUp.isDown() ? 1 : 0) - (o.keyDown.isDown() ? 1 : 0);
         double s = (o.keyLeft.isDown() ? 1 : 0) - (o.keyRight.isDown() ? 1 : 0);
         double v = (o.keyJump.isDown() ? 1 : 0) - (o.keyShift.isDown() ? 1 : 0);
-        double speed = BASE_SPEED * (o.keySprint.isDown() ? SPRINT_MULT : 1.0);
+        double speed = BASE_SPEED * (o.keySprint.isDown() ? SPRINT_MULT : 1.0) * dt;
 
         double yr = Math.toRadians(yaw);
         double pr = Math.toRadians(pitch);
@@ -119,10 +108,8 @@ public final class Freecam {
         double lx = Math.cos(yr);
         double lz = Math.sin(yr);
 
-        cam.setPos(
-            cam.getX() + (fx * f + lx * s) * speed,
-            cam.getY() + (fy * f + v) * speed,
-            cam.getZ() + (fz * f + lz * s) * speed
-        );
+        x += (fx * f + lx * s) * speed;
+        y += (fy * f + v) * speed;
+        z += (fz * f + lz * s) * speed;
     }
 }
