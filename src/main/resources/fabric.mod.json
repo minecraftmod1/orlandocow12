@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "freecam",
+  "version": "${version}",
+  "name": "Freecam",
+  "description": "Press F5 to toggle freecam without moving your player.",
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.freecam.FreecamClient"]
+  },
+  "mixins": [
+    { "config": "freecam.mixins.json", "environment": "client" }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": ">=1.21.11"
+  }
+}
